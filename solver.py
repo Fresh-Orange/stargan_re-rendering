@@ -8,6 +8,8 @@ import numpy as np
 import os
 import time
 import datetime
+import imageio
+from PIL import Image
 
 
 class Solver(object):
@@ -47,6 +49,8 @@ class Solver(object):
 
         # Test configurations.
         self.test_iters = config.test_iters
+        self.n_interpolations = config.n_interpolations
+        self.test_dims = config.test_dims
 
         # Miscellaneous.
         self.use_tensorboard = config.use_tensorboard
@@ -73,18 +77,21 @@ class Solver(object):
         """Create a generator and a discriminator."""
         if self.dataset in ['CelebA', 'RaFD']:
             self.G = Generator(self.g_conv_dim, self.c_dim, self.g_repeat_num)
-            self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num) 
+            self.D_src = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num)
+            self.D_cls = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num)
         elif self.dataset in ['Both']:
             self.G = Generator(self.g_conv_dim, self.c_dim+self.c2_dim+2, self.g_repeat_num)   # 2 for mask vector.
             self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim+self.c2_dim, self.d_repeat_num)
 
         self.g_optimizer = torch.optim.Adam(self.G.parameters(), self.g_lr, [self.beta1, self.beta2])
-        self.d_optimizer = torch.optim.Adam(self.D.parameters(), self.d_lr, [self.beta1, self.beta2])
+        self.d_src_optimizer = torch.optim.Adam(self.D_src.parameters(), self.d_lr, [self.beta1, self.beta2])
+        self.d_cls_optimizer = torch.optim.Adam(self.D_cls.parameters(), self.d_lr, [self.beta1, self.beta2])
         self.print_network(self.G, 'G')
-        self.print_network(self.D, 'D')
+        #self.print_network(self.D, 'D')
             
         self.G.to(self.device)
-        self.D.to(self.device)
+        self.D_src.to(self.device)
+        self.D_cls.to(self.device)
 
     def print_network(self, model, name):
         """Print out the network information."""
@@ -118,7 +125,8 @@ class Solver(object):
     def reset_grad(self):
         """Reset the gradient buffers."""
         self.g_optimizer.zero_grad()
-        self.d_optimizer.zero_grad()
+        self.d_src_optimizer.zero_grad()
+        self.d_cls_optimizer.zero_grad()
 
     def denorm(self, x):
         """Convert the range from [-1, 1] to [0, 1]."""
@@ -146,6 +154,14 @@ class Solver(object):
         out[np.arange(batch_size), labels.long()] = 1
         return out
 
+    def label2onehot_float(self, labels1, labels2, dim, value):
+        """Convert label indices to one-hot vectors."""
+        batch_size = labels1.size(0)
+        out = torch.zeros(batch_size, dim)
+        out[np.arange(batch_size), labels1.long()] = 1-value
+        out[np.arange(batch_size), labels2.long()] = value
+        return out
+
     def create_labels(self, c_org, c_dim=5, dataset='CelebA', selected_attrs=None):
         """Generate target domain labels for debugging and testing."""
         # Get hair color indices.
@@ -170,6 +186,18 @@ class Solver(object):
                 c_trg = self.label2onehot(torch.ones(c_org.size(0))*i, c_dim)
 
             c_trg_list.append(c_trg.to(self.device))
+        return c_trg_list
+
+    def interpolate_labels(self, c_org, c_dim, dims, dataset='CelebA', selected_attrs=None):
+        """Generate target domain labels for debugging and testing."""
+        alphas = np.linspace(0, 1, self.n_interpolations)
+        c_trg_list = []
+        for i in range(len(dims)-1):
+            for v in alphas:
+                if dataset == 'RaFD':
+                    c_trg = self.label2onehot_float(torch.ones(c_org.size(0)) * (dims[i]-1), torch.ones(c_org.size(0)) * (dims[i+1]-1),
+                                                    c_dim, v)
+                c_trg_list.append(c_trg.to(self.device))
         return c_trg_list
 
     def classification_loss(self, logit, target, dataset='CelebA'):
@@ -241,26 +269,28 @@ class Solver(object):
             # =================================================================================== #
 
             # Compute loss with real images.
-            out_src, out_cls = self.D(x_real)
+            out_src, _ = self.D_src(x_real)
+            _, out_cls = self.D_cls(x_real)
             d_loss_real = - torch.mean(out_src)
             d_loss_cls = self.classification_loss(out_cls, label_org, self.dataset)
 
             # Compute loss with fake images.
             x_fake = self.G(x_real, c_trg)
-            out_src, out_cls = self.D(x_fake.detach())
+            out_src, _ = self.D_src(x_fake.detach())
             d_loss_fake = torch.mean(out_src)
 
             # Compute loss for gradient penalty.
             alpha = torch.rand(x_real.size(0), 1, 1, 1).to(self.device)
             x_hat = (alpha * x_real.data + (1 - alpha) * x_fake.data).requires_grad_(True)
-            out_src, _ = self.D(x_hat)
+            out_src, _ = self.D_src(x_hat)
             d_loss_gp = self.gradient_penalty(out_src, x_hat)
 
             # Backward and optimize.
             d_loss = d_loss_real + d_loss_fake + self.lambda_cls * d_loss_cls + self.lambda_gp * d_loss_gp
             self.reset_grad()
             d_loss.backward()
-            self.d_optimizer.step()
+            self.d_src_optimizer.step()
+            self.d_cls_optimizer.step()
 
             # Logging.
             loss = {}
@@ -276,7 +306,10 @@ class Solver(object):
             if (i+1) % self.n_critic == 0:
                 # Original-to-target domain.
                 x_fake = self.G(x_real, c_trg)
-                out_src, out_cls = self.D(x_fake)
+                out_src, _ = self.D_src(x_fake)
+                _, out_cls = self.D_cls(x_fake)
+                #print(label_trg)
+                #print(out_cls)
                 g_loss_fake = - torch.mean(out_src)
                 g_loss_cls = self.classification_loss(out_cls, label_trg, self.dataset)
 
@@ -326,9 +359,11 @@ class Solver(object):
             # Save model checkpoints.
             if (i+1) % self.model_save_step == 0:
                 G_path = os.path.join(self.model_save_dir, '{}-G.ckpt'.format(i+1))
-                D_path = os.path.join(self.model_save_dir, '{}-D.ckpt'.format(i+1))
+                D_src_path = os.path.join(self.model_save_dir, '{}-D_src.ckpt'.format(i+1))
+                D_cls_path = os.path.join(self.model_save_dir, '{}-D_cls.ckpt'.format(i + 1))
                 torch.save(self.G.state_dict(), G_path)
-                torch.save(self.D.state_dict(), D_path)
+                torch.save(self.D_src.state_dict(), D_src_path)
+                torch.save(self.D_cls.state_dict(), D_cls_path)
                 print('Saved model checkpoints into {}...'.format(self.model_save_dir))
 
             # Decay learning rates.
@@ -543,10 +578,42 @@ class Solver(object):
                 for c_trg in c_trg_list:
                     x_fake_list.append(self.G(x_real, c_trg))
 
+
                 # Save the translated images.
                 x_concat = torch.cat(x_fake_list, dim=3)
+                x_concat_norm = self.denorm(x_concat.data.cpu())
+
                 result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
-                save_image(self.denorm(x_concat.data.cpu()), result_path, nrow=1, padding=0)
+                save_image(x_concat_norm, result_path, nrow=1, padding=0)
+                print('Saved real and fake images into {}...'.format(result_path))
+
+    def test_to_gif(self):
+        """Translate images using StarGAN trained on a single dataset."""
+        # Load the trained generator.
+        self.restore_model(self.test_iters)
+
+        # Set data loader.
+        if self.dataset == 'CelebA':
+            data_loader = self.celeba_loader
+        elif self.dataset == 'RaFD':
+            data_loader = self.rafd_loader
+
+        with torch.no_grad():
+            for i, (x_real, c_org) in enumerate(data_loader):
+
+                # Prepare input images and target domain labels.
+                x_real = x_real.to(self.device)
+                c_trg_list = self.interpolate_labels(c_org, self.c_dim, self.test_dims, self.dataset,
+                                                     self.selected_attrs)
+
+                # Translate images.
+                x_fake_list = [self.denorm(x_real[0].data.cpu()).numpy().transpose(1, 2, 0)]
+                for c_trg in c_trg_list:
+                    x_fake_list.append(self.denorm(self.G(x_real, c_trg)[0].data.cpu()).numpy().transpose(1, 2, 0))
+
+                result_path = os.path.join(self.result_dir, '{}-images.gif'.format(i + 1))
+                #Image.Image.save("g.gif",save_all=True, append_images=x_fake_list, duration=0.2)
+                imageio.mimsave(result_path, x_fake_list, 'GIF', duration=0.2)
                 print('Saved real and fake images into {}...'.format(result_path))
 
     def test_multi(self):
