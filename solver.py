@@ -77,21 +77,18 @@ class Solver(object):
         """Create a generator and a discriminator."""
         if self.dataset in ['CelebA', 'RaFD']:
             self.G = Generator(self.g_conv_dim, self.c_dim, self.g_repeat_num)
-            self.D_src = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num)
-            self.D_cls = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num)
+            self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num)
         elif self.dataset in ['Both']:
             self.G = Generator(self.g_conv_dim, self.c_dim+self.c2_dim+2, self.g_repeat_num)   # 2 for mask vector.
             self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim+self.c2_dim, self.d_repeat_num)
 
         self.g_optimizer = torch.optim.Adam(self.G.parameters(), self.g_lr, [self.beta1, self.beta2])
-        self.d_src_optimizer = torch.optim.Adam(self.D_src.parameters(), self.d_lr, [self.beta1, self.beta2])
-        self.d_cls_optimizer = torch.optim.Adam(self.D_cls.parameters(), self.d_lr, [self.beta1, self.beta2])
+        self.d_optimizer = torch.optim.Adam(self.D.parameters(), self.d_lr, [self.beta1, self.beta2])
         self.print_network(self.G, 'G')
-        #self.print_network(self.D, 'D')
+        self.print_network(self.D, 'D')
             
         self.G.to(self.device)
-        self.D_src.to(self.device)
-        self.D_cls.to(self.device)
+        self.D.to(self.device)
 
     def print_network(self, model, name):
         """Print out the network information."""
@@ -125,8 +122,7 @@ class Solver(object):
     def reset_grad(self):
         """Reset the gradient buffers."""
         self.g_optimizer.zero_grad()
-        self.d_src_optimizer.zero_grad()
-        self.d_cls_optimizer.zero_grad()
+        self.d_optimizer.zero_grad()
 
     def denorm(self, x):
         """Convert the range from [-1, 1] to [0, 1]."""
@@ -216,8 +212,8 @@ class Solver(object):
             data_loader = self.rafd_loader
 
         # Fetch fixed inputs for debugging.
-        data_iter = iter(data_loader)
-        x_fixed, c_org = next(data_iter)
+        #data_iter = iter(data_loader)
+        x_fixed, c_org, fixed_file_idx_org = data_loader.train_batch()
         x_fixed = x_fixed.to(self.device)
         c_fixed_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs)
 
@@ -241,15 +237,14 @@ class Solver(object):
             # =================================================================================== #
 
             # Fetch real images and labels.
-            try:
-                x_real, label_org = next(data_iter)
-            except:
-                data_iter = iter(data_loader)
-                x_real, label_org = next(data_iter)
+            x_real, label_org, file_idx_org = data_loader.train_batch()
 
             # Generate target domain labels randomly.
             rand_idx = torch.randperm(label_org.size(0))
             label_trg = label_org[rand_idx]
+
+            x_real_trg = data_loader.get_by_idx(label_trg, file_idx_org)
+
 
             if self.dataset == 'CelebA':
                 c_org = label_org.clone()
@@ -259,6 +254,7 @@ class Solver(object):
                 c_trg = self.label2onehot(label_trg, self.c_dim)
 
             x_real = x_real.to(self.device)           # Input images.
+            x_real_trg = x_real_trg.to(self.device)
             c_org = c_org.to(self.device)             # Original domain labels.
             c_trg = c_trg.to(self.device)             # Target domain labels.
             label_org = label_org.to(self.device)     # Labels for computing classification loss.
@@ -269,28 +265,31 @@ class Solver(object):
             # =================================================================================== #
 
             # Compute loss with real images.
-            out_src, _ = self.D_src(x_real)
-            _, out_cls = self.D_cls(x_real)
+            out_src, out_cls = self.D(x_real)
             d_loss_real = - torch.mean(out_src)
+            #print(out_cls)
+            #print(label_org)
             d_loss_cls = self.classification_loss(out_cls, label_org, self.dataset)
 
             # Compute loss with fake images.
             x_fake = self.G(x_real, c_trg)
-            out_src, _ = self.D_src(x_fake.detach())
+            out_src, out_cls = self.D(x_fake.detach())
             d_loss_fake = torch.mean(out_src)
+
+            # Compute loss with fake cls images.
+            # d_loss_fake_cls = self.classification_loss(out_cls, rand_label_trg, self.dataset)
 
             # Compute loss for gradient penalty.
             alpha = torch.rand(x_real.size(0), 1, 1, 1).to(self.device)
             x_hat = (alpha * x_real.data + (1 - alpha) * x_fake.data).requires_grad_(True)
-            out_src, _ = self.D_src(x_hat)
+            out_src, _ = self.D(x_hat)
             d_loss_gp = self.gradient_penalty(out_src, x_hat)
 
             # Backward and optimize.
-            d_loss = d_loss_real + d_loss_fake + self.lambda_cls * d_loss_cls + self.lambda_gp * d_loss_gp
+            d_loss = d_loss_real + d_loss_fake + self.lambda_cls * d_loss_cls + self.lambda_gp * d_loss_gp # + d_loss_fake_cls
             self.reset_grad()
             d_loss.backward()
-            self.d_src_optimizer.step()
-            self.d_cls_optimizer.step()
+            self.d_optimizer.step()
 
             # Logging.
             loss = {}
@@ -298,6 +297,7 @@ class Solver(object):
             loss['D/loss_fake'] = d_loss_fake.item()
             loss['D/loss_cls'] = d_loss_cls.item()
             loss['D/loss_gp'] = d_loss_gp.item()
+            # loss['D/loss_fake_cls'] = d_loss_fake_cls.item()
             
             # =================================================================================== #
             #                               3. Train the generator                                #
@@ -306,19 +306,18 @@ class Solver(object):
             if (i+1) % self.n_critic == 0:
                 # Original-to-target domain.
                 x_fake = self.G(x_real, c_trg)
-                out_src, _ = self.D_src(x_fake)
-                _, out_cls = self.D_cls(x_fake)
-                #print(label_trg)
-                #print(out_cls)
+                out_src, out_cls = self.D(x_fake)
                 g_loss_fake = - torch.mean(out_src)
                 g_loss_cls = self.classification_loss(out_cls, label_trg, self.dataset)
+
+                L2_loss = torch.mean((x_fake - x_real_trg).pow(2))
 
                 # Target-to-original domain.
                 x_reconst = self.G(x_fake, c_org)
                 g_loss_rec = torch.mean(torch.abs(x_real - x_reconst))
 
                 # Backward and optimize.
-                g_loss = g_loss_fake + self.lambda_rec * g_loss_rec + self.lambda_cls * g_loss_cls
+                g_loss = g_loss_fake + self.lambda_rec * g_loss_rec + self.lambda_cls * g_loss_cls + 10*L2_loss
                 self.reset_grad()
                 g_loss.backward()
                 self.g_optimizer.step()
@@ -327,6 +326,7 @@ class Solver(object):
                 loss['G/loss_fake'] = g_loss_fake.item()
                 loss['G/loss_rec'] = g_loss_rec.item()
                 loss['G/loss_cls'] = g_loss_cls.item()
+                loss['G/loss_L1'] = L2_loss.item()
 
             # =================================================================================== #
             #                                 4. Miscellaneous                                    #
@@ -359,11 +359,9 @@ class Solver(object):
             # Save model checkpoints.
             if (i+1) % self.model_save_step == 0:
                 G_path = os.path.join(self.model_save_dir, '{}-G.ckpt'.format(i+1))
-                D_src_path = os.path.join(self.model_save_dir, '{}-D_src.ckpt'.format(i+1))
-                D_cls_path = os.path.join(self.model_save_dir, '{}-D_cls.ckpt'.format(i + 1))
+                D_path = os.path.join(self.model_save_dir, '{}-D.ckpt'.format(i+1))
                 torch.save(self.G.state_dict(), G_path)
-                torch.save(self.D_src.state_dict(), D_src_path)
-                torch.save(self.D_cls.state_dict(), D_cls_path)
+                torch.save(self.D.state_dict(), D_path)
                 print('Saved model checkpoints into {}...'.format(self.model_save_dir))
 
             # Decay learning rates.
