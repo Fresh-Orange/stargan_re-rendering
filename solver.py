@@ -77,18 +77,18 @@ class Solver(object):
         """Create a generator and a discriminator."""
         if self.dataset in ['CelebA', 'RaFD']:
             self.G = Generator(self.g_conv_dim, self.c_dim, self.g_repeat_num)
-            self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num)
+            #self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num)
         elif self.dataset in ['Both']:
             self.G = Generator(self.g_conv_dim, self.c_dim+self.c2_dim+2, self.g_repeat_num)   # 2 for mask vector.
-            self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim+self.c2_dim, self.d_repeat_num)
+            #self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim+self.c2_dim, self.d_repeat_num)
 
         self.g_optimizer = torch.optim.Adam(self.G.parameters(), self.g_lr, [self.beta1, self.beta2])
-        self.d_optimizer = torch.optim.Adam(self.D.parameters(), self.d_lr, [self.beta1, self.beta2])
+        #self.d_optimizer = torch.optim.Adam(self.D.parameters(), self.d_lr, [self.beta1, self.beta2])
         self.print_network(self.G, 'G')
-        self.print_network(self.D, 'D')
+        #self.print_network(self.D, 'D')
             
         self.G.to(self.device)
-        self.D.to(self.device)
+        #self.D.to(self.device)
 
     def print_network(self, model, name):
         """Print out the network information."""
@@ -103,9 +103,9 @@ class Solver(object):
         """Restore the trained generator and discriminator."""
         print('Loading the trained models from step {}...'.format(resume_iters))
         G_path = os.path.join(self.model_save_dir, '{}-G.ckpt'.format(resume_iters))
-        D_path = os.path.join(self.model_save_dir, '{}-D.ckpt'.format(resume_iters))
+        #D_path = os.path.join(self.model_save_dir, '{}-D.ckpt'.format(resume_iters))
         self.G.load_state_dict(torch.load(G_path, map_location=lambda storage, loc: storage))
-        self.D.load_state_dict(torch.load(D_path, map_location=lambda storage, loc: storage))
+        #self.D.load_state_dict(torch.load(D_path, map_location=lambda storage, loc: storage))
 
     def build_tensorboard(self):
         """Build a tensorboard logger."""
@@ -116,13 +116,13 @@ class Solver(object):
         """Decay learning rates of the generator and discriminator."""
         for param_group in self.g_optimizer.param_groups:
             param_group['lr'] = g_lr
-        for param_group in self.d_optimizer.param_groups:
-            param_group['lr'] = d_lr
+        #for param_group in self.d_optimizer.param_groups:
+        #    param_group['lr'] = d_lr
 
     def reset_grad(self):
         """Reset the gradient buffers."""
         self.g_optimizer.zero_grad()
-        self.d_optimizer.zero_grad()
+        #self.d_optimizer.zero_grad()
 
     def denorm(self, x):
         """Convert the range from [-1, 1] to [0, 1]."""
@@ -219,7 +219,7 @@ class Solver(object):
 
         # Learning rate cache for decaying.
         g_lr = self.g_lr
-        d_lr = self.d_lr
+        #d_lr = self.d_lr
 
         # Start training from scratch or resume training.
         start_iters = 0
@@ -265,38 +265,38 @@ class Solver(object):
             # =================================================================================== #
 
             # Compute loss with real images.
-            out_src, out_cls = self.D(x_real)
-            d_loss_real = - torch.mean(out_src)
-            #print(out_cls)
-            #print(label_org)
-            d_loss_cls = self.classification_loss(out_cls, label_org, self.dataset)
-
-            # Compute loss with fake images.
-            x_fake = self.G(x_real, c_trg)
-            out_src, out_cls = self.D(x_fake.detach())
-            d_loss_fake = torch.mean(out_src)
-
-            # Compute loss with fake cls images.
-            # d_loss_fake_cls = self.classification_loss(out_cls, rand_label_trg, self.dataset)
-
-            # Compute loss for gradient penalty.
-            alpha = torch.rand(x_real.size(0), 1, 1, 1).to(self.device)
-            x_hat = (alpha * x_real.data + (1 - alpha) * x_fake.data).requires_grad_(True)
-            out_src, _ = self.D(x_hat)
-            d_loss_gp = self.gradient_penalty(out_src, x_hat)
-
-            # Backward and optimize.
-            d_loss = d_loss_real + d_loss_fake + self.lambda_cls * d_loss_cls + self.lambda_gp * d_loss_gp # + d_loss_fake_cls
-            self.reset_grad()
-            d_loss.backward()
-            self.d_optimizer.step()
-
-            # Logging.
+            # out_src, out_cls = self.D(x_real)
+            # d_loss_real = - torch.mean(out_src)
+            # #print(out_cls)
+            # #print(label_org)
+            # d_loss_cls = self.classification_loss(out_cls, label_org, self.dataset)
+            #
+            # # Compute loss with fake images.
+            # x_fake = self.G(x_real, c_trg)
+            # out_src, out_cls = self.D(x_fake.detach())
+            # d_loss_fake = torch.mean(out_src)
+            #
+            # # Compute loss with fake cls images.
+            # # d_loss_fake_cls = self.classification_loss(out_cls, rand_label_trg, self.dataset)
+            #
+            # # Compute loss for gradient penalty.
+            # alpha = torch.rand(x_real.size(0), 1, 1, 1).to(self.device)
+            # x_hat = (alpha * x_real.data + (1 - alpha) * x_fake.data).requires_grad_(True)
+            # out_src, _ = self.D(x_hat)
+            # d_loss_gp = self.gradient_penalty(out_src, x_hat)
+            #
+            # # Backward and optimize.
+            # d_loss = d_loss_real + d_loss_fake + self.lambda_cls * d_loss_cls + self.lambda_gp * d_loss_gp # + d_loss_fake_cls
+            # self.reset_grad()
+            # d_loss.backward()
+            # self.d_optimizer.step()
+            #
+            # # Logging.
             loss = {}
-            loss['D/loss_real'] = d_loss_real.item()
-            loss['D/loss_fake'] = d_loss_fake.item()
-            loss['D/loss_cls'] = d_loss_cls.item()
-            loss['D/loss_gp'] = d_loss_gp.item()
+            # loss['D/loss_real'] = d_loss_real.item()
+            # loss['D/loss_fake'] = d_loss_fake.item()
+            # loss['D/loss_cls'] = d_loss_cls.item()
+            # loss['D/loss_gp'] = d_loss_gp.item()
             # loss['D/loss_fake_cls'] = d_loss_fake_cls.item()
             
             # =================================================================================== #
@@ -306,27 +306,27 @@ class Solver(object):
             if (i+1) % self.n_critic == 0:
                 # Original-to-target domain.
                 x_fake = self.G(x_real, c_trg)
-                out_src, out_cls = self.D(x_fake)
-                g_loss_fake = - torch.mean(out_src)
-                g_loss_cls = self.classification_loss(out_cls, label_trg, self.dataset)
+                #out_src, out_cls = self.D(x_fake)
+                #g_loss_fake = - torch.mean(out_src)
+                #g_loss_cls = self.classification_loss(out_cls, label_trg, self.dataset)
 
-                L2_loss = torch.mean((x_fake - x_real_trg).pow(2))
+                L1_loss = torch.mean(torch.abs(x_fake - x_real_trg))
 
                 # Target-to-original domain.
-                x_reconst = self.G(x_fake, c_org)
-                g_loss_rec = torch.mean(torch.abs(x_real - x_reconst))
+                #x_reconst = self.G(x_fake, c_org)
+                #g_loss_rec = torch.mean(torch.abs(x_real - x_reconst))
 
                 # Backward and optimize.
-                g_loss = g_loss_fake + self.lambda_rec * g_loss_rec + self.lambda_cls * g_loss_cls + 10*L2_loss
+                g_loss = L1_loss
                 self.reset_grad()
                 g_loss.backward()
                 self.g_optimizer.step()
 
                 # Logging.
-                loss['G/loss_fake'] = g_loss_fake.item()
-                loss['G/loss_rec'] = g_loss_rec.item()
-                loss['G/loss_cls'] = g_loss_cls.item()
-                loss['G/loss_L1'] = L2_loss.item()
+                # loss['G/loss_fake'] = g_loss_fake.item()
+                # loss['G/loss_rec'] = g_loss_rec.item()
+                # loss['G/loss_cls'] = g_loss_cls.item()
+                loss['G/loss_L1'] = L1_loss.item()
 
             # =================================================================================== #
             #                                 4. Miscellaneous                                    #
@@ -359,17 +359,17 @@ class Solver(object):
             # Save model checkpoints.
             if (i+1) % self.model_save_step == 0:
                 G_path = os.path.join(self.model_save_dir, '{}-G.ckpt'.format(i+1))
-                D_path = os.path.join(self.model_save_dir, '{}-D.ckpt'.format(i+1))
+                #D_path = os.path.join(self.model_save_dir, '{}-D.ckpt'.format(i+1))
                 torch.save(self.G.state_dict(), G_path)
-                torch.save(self.D.state_dict(), D_path)
+                #torch.save(self.D.state_dict(), D_path)
                 print('Saved model checkpoints into {}...'.format(self.model_save_dir))
 
             # Decay learning rates.
             if (i+1) % self.lr_update_step == 0 and (i+1) > (self.num_iters - self.num_iters_decay):
                 g_lr -= (self.g_lr / float(self.num_iters_decay))
-                d_lr -= (self.d_lr / float(self.num_iters_decay))
-                self.update_lr(g_lr, d_lr)
-                print ('Decayed learning rates, g_lr: {}, d_lr: {}.'.format(g_lr, d_lr))
+                #d_lr -= (self.d_lr / float(self.num_iters_decay))
+                self.update_lr(g_lr, None)
+                print ('Decayed learning rates, g_lr: {}.'.format(g_lr))
 
     def train_multi(self):
         """Train StarGAN with multiple datasets."""        
