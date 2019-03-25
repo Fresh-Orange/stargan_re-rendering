@@ -9,7 +9,6 @@ import random
 
 class CelebA(data.Dataset):
     """Dataset class for the CelebA dataset."""
-
     def __init__(self, image_dir, attr_path, selected_attrs, transform, mode):
         """Initialize and preprocess the CelebA dataset."""
         self.image_dir = image_dir
@@ -72,10 +71,11 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
                batch_size=16, dataset='CelebA', mode='train', num_workers=1):
     """Build and return a data loader."""
     transform = []
-    if mode == 'train':
-        transform.append(T.RandomHorizontalFlip())
+    #if mode == 'train':
+    #    transform.append(T.RandomHorizontalFlip())
     transform.append(T.CenterCrop(crop_size))
     transform.append(T.Resize(image_size))
+    # transform.append(T.RandomRotation((90,90)))
     transform.append(T.ToTensor())
     transform.append(T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
     transform = T.Compose(transform)
@@ -84,6 +84,9 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
         dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode)
     elif dataset == 'RaFD':
         dataset = ImageFolder(image_dir, transform)
+        with open("classes", 'w') as f:
+            classes = [str(i) for i in dataset.classes]
+            f.write(" ".join(classes))
 
     data_loader = data.DataLoader(dataset=dataset,
                                   batch_size=batch_size,

@@ -12,6 +12,7 @@ from torch.autograd import Variable
 import random
 from torchvision import transforms as T
 from torchvision import utils
+from TripletFaceDataset import TripletFaceDataset
 
 
 
@@ -94,6 +95,29 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
 
     data_loader = Loader(transform, batch_size)
     return data_loader
+
+
+def get_triplet_loader(config, image_dir, attr_path, selected_attrs, crop_size=178, image_size=128,
+               batch_size=16, dataset='CelebA', mode='train', num_workers=1):
+    """Build and return a data loader."""
+    transform = []
+    #if mode == 'train':
+    #    transform.append(T.RandomHorizontalFlip())
+    # transform.append(T.ToPILImage())
+    transform.append(T.CenterCrop(crop_size))
+    transform.append(T.Resize(image_size))
+    # transform.append(T.RandomRotation((90,90)))
+    transform.append(T.ToTensor())
+    transform.append(T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
+    transform = T.Compose(transform)
+
+    kwargs = {'num_workers': 0, 'pin_memory': True}
+
+    train_dir = TripletFaceDataset(dir=config.id_dataroot, n_triplets=config.n_triplets, transform=transform)
+    train_loader = torch.utils.data.DataLoader(train_dir,
+                                               batch_size=config.batch_size, shuffle=False, **kwargs)
+
+    return train_dir, train_loader
 
 
 class Loader(object):
