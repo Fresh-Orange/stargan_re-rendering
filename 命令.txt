@@ -1,0 +1,75 @@
+训练（multi-pie， 单纯starGAN,256*256）
+python main.py --mode train --dataset RaFD --image_size 256 --c_dim 6  --sample_dir stargan_rafd_multi_good_256/samples --log_dir stargan_rafd_multi_good_256/logs   --model_save_dir stargan_rafd_multi_good_256/models --result_dir stargan_rafd_multi_good_256/results --rafd_image_dir  ../AI_DATA/multipie_align_train --sample_step 100  --log_step 5 --use_id 0 --use_L1 0 --log_image_quality 0
+
+训练（multi-pie， starGAN+L1_loss,256*256）
+python main.py --mode train --dataset RaFD --image_size 256 --c_dim 6  --sample_dir stargan_rafd_L1loss_256/samples --log_dir stargan_rafd_L1loss_256/logs   --model_save_dir stargan_rafd_L1loss_256/models --result_dir stargan_rafd_L1loss_256/results --rafd_image_dir  ../AI_DATA/multipie_align_train --sample_step 100  --log_step 5 --use_id 0 --use_L1 1 --log_image_quality 0
+
+训练（multi-pie， starGAN+L1_loss+id,256*256）
+python main.py --mode train --dataset RaFD --image_size 256 --c_dim 6  --sample_dir stargan_rafd_ID_256/samples --log_dir stargan_rafd_ID_256/logs   --model_save_dir stargan_rafd_ID_256/models --result_dir stargan_rafd_ID_256/results --rafd_image_dir  ../AI_DATA/multipie_align_train --sample_step 100  --log_step 5 --use_id 1 --use_L1 1 --log_image_quality 0
+
+继续训练（multi-pie， 单纯starGAN）
+python main.py --mode train --dataset RaFD --image_size 128 --c_dim 6  --sample_dir stargan_rafd_multi_good/samples --log_dir stargan_rafd_multi_good/logs   --model_save_dir stargan_rafd_multi_good/models --result_dir stargan_rafd_multi_good/results --rafd_image_dir  ../AI_DATA/multipie_align_train --sample_step 100  --log_step 5 --resume_iters 170000 --use_id 0 --use_L1 0 --log_image_quality 0
+
+继续训练（multi-pie， starGAN+L1_loss）
+python main.py --mode train --dataset RaFD --image_size 128 --c_dim 6  --sample_dir stargan_rafd_L1loss/samples --log_dir stargan_rafd_L1loss/logs   --model_save_dir stargan_rafd_L1loss/models --result_dir stargan_rafd_L1loss/results --rafd_image_dir  ../AI_DATA/multipie_align_train --sample_step 100  --log_step 5 --resume_iters 165000 --use_id 0 --use_L1 1 --log_image_quality 0
+
+
+测试图像质量（multi-pie， 单纯starGAN）
+python main.py --mode train --dataset RaFD --image_size 128 --batch_size 64 --c_dim 6  --sample_dir stargan_rafd/samples --log_dir stargan_rafd/logs   --model_save_dir stargan_rafd_multi_good/models --result_dir stargan_rafd/results --rafd_image_dir  ../AI_DATA/multipie_align_test --sample_step 100  --log_step 5 --resume_iters 165000
+
+测试图像质量（multi-pie， starGAN+L1_loss）
+python main.py --mode train --dataset RaFD --image_size 128 --batch_size 64 --c_dim 6  --sample_dir stargan_rafd/samples --log_dir stargan_rafd/logs   --model_save_dir stargan_rafd_L1loss/models --result_dir stargan_rafd/results --rafd_image_dir  ../AI_DATA/multipie_align_test --sample_step 100  --log_step 5 --resume_iters 165000
+
+生成测试图像（multi-pie，satrGAN）
+python main.py --mode train --dataset RaFD --image_size 128 --batch_size 16 --c_dim 6  --sample_dir stargan_rafd/samples --log_dir stargan_rafd/logs   --model_save_dir stargan_rafd_multi_good/models --result_dir stargan_rafd/results --rafd_image_dir  ../AI_DATA/multipie_align_test --sample_step 5  --log_step 5 --resume_iters 290000
+
+生成测试图像（multi-pie，satrGAN+L1_loss）
+python main.py --mode train --dataset RaFD --image_size 128 --batch_size 16 --c_dim 6  --sample_dir stargan_rafd/samples --log_dir stargan_rafd/logs   --model_save_dir stargan_rafd_L1loss/models --result_dir stargan_rafd/results --rafd_image_dir  ../AI_DATA/multipie_align_test --sample_step 5  --log_step 5 --resume_iters 290000
+
+
+训练（basel，starGAN）
+python main.py --mode train --dataset RaFD --image_size 128 --c_dim 10  --sample_dir stargan_rafd_genface_multi/samples --log_dir stargan_rafd_genface_multi/logs   --model_save_dir stargan_rafd_genface_multi/models --result_dir stargan_rafd_genface_multi/results --rafd_image_dir  ../AI_DATA/generated_face_10_train --sample_step 100  --log_step 10 --use_id 0 --use_L1 0 --log_image_quality 0
+
+训练（basel，starGAN，256*256）
+python main.py --mode train --dataset RaFD --image_size 256 --c_dim 10  --sample_dir stargan_rafd_genface_multi_256/samples --log_dir stargan_rafd_genface_multi_256/logs   --model_save_dir stargan_rafd_genface_multi_256/models --result_dir stargan_rafd_genface_multi_256/results --rafd_image_dir  ../AI_DATA/generated_face_10_train --sample_step 100  --log_step 10 --use_id 0 --use_L1 0 --log_image_quality 0
+
+
+训练（basel，starGAN+L1）
+python main.py --mode train --dataset RaFD --image_size 128 --c_dim 10  --sample_dir stargan_rafd_genface_L1/samples --log_dir stargan_rafd_genface_L1/logs   --model_save_dir stargan_rafd_genface_L1/models --result_dir stargan_rafd_genface_L1/results --rafd_image_dir  ../AI_DATA/generated_face_10_train --sample_step 100  --log_step 10 --use_id 0 --use_L1 1 --log_image_quality 0
+
+训练（basel，starGAN+L1,256*256）
+python main.py --mode train --dataset RaFD --image_size 256 --c_dim 10  --sample_dir stargan_rafd_genface_L1_256/samples --log_dir stargan_rafd_genface_L1_256/logs   --model_save_dir stargan_rafd_genface_L1_256/models --result_dir stargan_rafd_genface_L1_256/results --rafd_image_dir  ../AI_DATA/generated_face_10_train --sample_step 100  --log_step 10 --use_id 0 --use_L1 1 --log_image_quality 0
+
+继续训练（basel，starGAN+L1）
+python main.py --mode train --dataset RaFD --image_size 128 --c_dim 10  --sample_dir stargan_rafd_genface_L1/samples --log_dir stargan_rafd_genface_L1/logs   --model_save_dir stargan_rafd_genface_L1/models --result_dir stargan_rafd_genface_L1/results --rafd_image_dir  ../AI_DATA/generated_face_10_train --sample_step 100  --log_step 10 --use_id 0 --use_L1 1 --log_image_quality 0 --resume_iters 20000
+
+训练（basel，starGAN+L1+id）
+python main.py --mode train --dataset RaFD --image_size 128 --c_dim 10  --sample_dir stargan_rafd_genface_id/samples --log_dir stargan_rafd_genface_id/logs   --model_save_dir stargan_rafd_genface_id/models --result_dir stargan_rafd_genface_id/results --rafd_image_dir  ../AI_DATA/generated_face_10_train --sample_step 100  --log_step 10 --use_id 1 --use_L1 1 --log_image_quality 0 --facenet_path /media/data2/laixc/facenet_pytorch/model/facenet_generated_1.ckpt
+
+
+测试图像质量（basel，starGAN）
+python main.py --mode train --dataset RaFD --image_size 128 --batch_size 32 --c_dim 10  --sample_dir stargan_rafd_genface_multi/samples --log_dir stargan_rafd_genface_multi/logs   --model_save_dir stargan_rafd_genface_multi/models --result_dir stargan_rafd_genface_multi/results --rafd_image_dir  ../AI_DATA/generated_face_10_test --sample_step 100  --log_step 5 --use_id 0 --use_L1 0 --resume_iters 20000
+
+
+测试图像质量（basel，starGAN+L1）
+python main.py --mode train --dataset RaFD --image_size 128 --batch_size 32 --c_dim 10  --sample_dir stargan_rafd_genface_L1/samples --log_dir stargan_rafd_genface_L1/logs   --model_save_dir stargan_rafd_genface_L1/models --result_dir stargan_rafd_genface_L1/results --rafd_image_dir  ../AI_DATA/generated_face_10_test --sample_step 100  --log_step 5 --use_id 0 --use_L1 1 --resume_iters 30000
+
+测试图像质量（basel，starGAN，256*256）
+python main.py --mode train --dataset RaFD --image_size 256 --batch_size 16 --c_dim 10  --sample_dir stargan_rafd_genface_multi/samples --log_dir stargan_rafd_genface_multi/logs   --model_save_dir stargan_rafd_genface_multi_256/models --result_dir stargan_rafd_genface_multi/results --rafd_image_dir  ../AI_DATA/generated_face_10_test --sample_step 100  --log_step 5 --use_id 0 --use_L1 0 --resume_iters 40000
+
+
+测试图像质量（basel，starGAN+L1,256*256）
+python main.py --mode train --dataset RaFD --image_size 256 --batch_size 16 --c_dim 10  --sample_dir stargan_rafd_genface_L1/samples --log_dir stargan_rafd_genface_L1/logs   --model_save_dir stargan_rafd_genface_L1_256/models --result_dir stargan_rafd_genface_L1/results --rafd_image_dir  ../AI_DATA/generated_face_10_test --sample_step 100  --log_step 5 --use_id 0 --use_L1 1 --resume_iters 40000
+
+人脸归一化-256
+python main.py --mode test --dataset RaFD --image_size 256 --c_dim 6 --batch_size 1 --sample_dir stargan_rafd_multi_good_256/samples --log_dir stargan_rafd_multi_good_256/logs   --model_save_dir stargan_rafd_L1loss_256/models --result_dir stargan_rafd_multi_good_256/results --rafd_image_dir  ../AI_DATA/multi_pie_id_crop_test --sample_step 100  --log_step 5 --use_id 0 --use_L1 0 --log_image_quality 0 --test_iters 200000
+
+人脸归一化-128
+python main.py --mode test --dataset RaFD --image_size 128 --c_dim 6 --batch_size 1 --sample_dir stargan_rafd_multi_good_256/samples --log_dir stargan_rafd_multi_good_256/logs   --model_save_dir stargan_rafd_multi_good/models --result_dir stargan_rafd_multi_good/results --rafd_image_dir  ../AI_DATA/multi_pie_id_crop_test --sample_step 100  --log_step 5 --use_id 0 --use_L1 0 --log_image_quality 0 --test_iters 400000
+
+人脸embedding
+python3 export_embeddings.py --gpu_id 1 --model_dir /media/data2/laixc/AI_DATA/facenet_pretrain_model/ --data_dir /media/data2/laixc/AI_DATA/multi_pie_id_crop_test
+
+python3 export_embeddings.py --gpu_id 1 --model_dir /media/data2/laixc/AI_DATA/facenet_pretrain_model/ --data_dir /media/data2/laixc/StarGAN/light_normalization_images --embeddings_name generated_face_embedding.npy --labels_name generated_face_labels.npy
+
+
