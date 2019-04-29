@@ -15,6 +15,8 @@
 
 `myloader.py`: 为了实现L1损失而重新设计的loader，能很方便的得到某个人不同光照的图片
 
+`1nn_classfier`: 用于做*人脸识别率*实验，使用的是原始图像的k-nn算法，其中k为1
+
 `命令.txt`: 运行不同情况的命令行
 
 `BaselFaceModel`: 3D渲染生成人脸模型，用以生成Basel数据集，
