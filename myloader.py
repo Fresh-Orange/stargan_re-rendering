@@ -12,7 +12,6 @@ from torch.autograd import Variable
 import random
 from torchvision import transforms as T
 from torchvision import utils
-from TripletFaceDataset import TripletFaceDataset
 
 
 
@@ -93,31 +92,12 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
     transform.append(T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
     transform = T.Compose(transform)
 
+    global DATA_PATH
+    DATA_PATH = image_dir
+
     data_loader = Loader(transform, batch_size)
+
     return data_loader
-
-
-def get_triplet_loader(config, image_dir, attr_path, selected_attrs, crop_size=178, image_size=128,
-               batch_size=16, dataset='CelebA', mode='train', num_workers=1):
-    """Build and return a data loader."""
-    transform = []
-    #if mode == 'train':
-    #    transform.append(T.RandomHorizontalFlip())
-    # transform.append(T.ToPILImage())
-    transform.append(T.CenterCrop(crop_size))
-    transform.append(T.Resize(image_size))
-    # transform.append(T.RandomRotation((90,90)))
-    transform.append(T.ToTensor())
-    transform.append(T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
-    transform = T.Compose(transform)
-
-    kwargs = {'num_workers': 0, 'pin_memory': True}
-
-    train_dir = TripletFaceDataset(dir=config.id_dataroot, n_triplets=config.n_triplets, transform=transform)
-    train_loader = torch.utils.data.DataLoader(train_dir,
-                                               batch_size=config.batch_size, shuffle=False, **kwargs)
-
-    return train_dir, train_loader
 
 
 class Loader(object):
@@ -126,50 +106,70 @@ class Loader(object):
         self.transform = transform
         self.images, self.catimages = self.load_images()
         self.batch_size = batch_size
+        print("len", self.len())
 
     def load_images(self):
         """
         Load dataset.
         """
-        # load data
-        images_filename_1 = 'multipie_az-45el0.pth'
-        images_filename_2 = 'multipie_az-90el0.pth'
-        images_filename_3 = 'multipie_az0el0.pth'
-        images_filename_4 = 'multipie_az180el0.pth'
-        images_filename_5 = 'multipie_az45el0.pth'
-        images_filename_6 = 'multipie_az90el0.pth'
+        images_filename = ['multipie_az-45el0.pth', 'multipie_az-90el0.pth', 'multipie_az0el0.pth',
+                           'multipie_az180el0.pth', 'multipie_az45el0.pth', 'multipie_az90el0.pth']
 
+        # images_filename = ['generated_az-45el0.pth', 'generated_az-90el0.pth', 'generated_az0el0.pth',
+        #                    'generated_az180el0.pth', 'generated_az45el0.pth', 'generated_az90el0.pth',
+        #                    'generated_az0el-90.pth',
+        #                    'generated_az0el-45.pth', 'generated_az0el45.pth', 'generated_az0el90.pth'
+        #                    ]
+
+        # load data
         print("Reading data ...")
 
-        print("Reading class 1")
-        images1 = torch.load(os.path.join(DATA_PATH, images_filename_1))
-        #print(images1.size())
-        #sample_path = os.path.join('{}-images.jpg'.format(1))
-        #utils.save_image(images1[0].permute(2, 0, 1), sample_path)
-        #raise RuntimeError
-        print("Reading class 2")
-        images2 = torch.load(os.path.join(DATA_PATH, images_filename_2))
-        print("Reading class 3")
-        images3 = torch.load(os.path.join(DATA_PATH, images_filename_3))
-        print("Reading class 4")
-        images4 = torch.load(os.path.join(DATA_PATH, images_filename_4))
-        print("Reading class 5")
-        images5 = torch.load(os.path.join(DATA_PATH, images_filename_5))
-        print("Reading class 6")
-        images6 = torch.load(os.path.join(DATA_PATH, images_filename_6))
-        assert len(images1) == len(images2) == len(images3)
+        images = []
+
+        for filename in images_filename:
+            print("Reading class {}".format(filename))
+            images.append(torch.load(os.path.join(DATA_PATH, filename)))
 
         print("Finish reading data ...")
 
-        images = [images1, images2, images3, images4, images5, images6]
-
-        catimages = torch.cat((images1,images2, images3, images4, images5, images6), 0)
+        catimages = torch.cat(tuple(images), 0)
 
         return images, catimages
 
 
     def train_batch(self):
         idxs = np.random.randint(low=0, high=self.len(), size=self.batch_size)
+        # idxs = np.arange(0, self.batch_size)
+        class_idxs = idxs // len(self.images[0])
+        file_idxs = idxs % len(self.images[0])
+
+        idxs = torch.LongTensor(idxs)
+        images = self.catimages.index_select(0, idxs)
+
+        images = [image.permute(2, 0, 1) for image in images]
+        images = torch.stack([self.transform(image) for image in images])
+        #images = self.transform(images)
+
+        return images, torch.tensor(class_idxs), torch.tensor(file_idxs)
+
+    def __getitem__(self, index):
+        index = np.ones(shape=(1))*index
+        #print(index)
+        idxs = torch.LongTensor(index)
+        class_idxs = idxs // len(self.images[0])
+
+        images = self.catimages.index_select(0, idxs)
+
+        images = [image.permute(2, 0, 1) for image in images]
+        images = torch.stack([self.transform(image) for image in images])
+
+        return images, torch.tensor(class_idxs)
+
+    def test_batch(self):
+        """
+        batch_size = 1
+        """
+        idxs = np.random.randint(low=0, high=self.len(), size=1)
         class_idxs = idxs // len(self.images[0])
         file_idxs = idxs % len(self.images[0])
 

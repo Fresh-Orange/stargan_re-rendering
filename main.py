@@ -1,12 +1,13 @@
 import os
 import argparse
 from solver import Solver
-from myloader import get_loader, get_triplet_loader
+from myloader import get_loader
+import data_loader
 from torch.backends import cudnn
 import torch
 
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="5"
 
 
 def str2bool(v):
@@ -39,13 +40,13 @@ def main(config):
                                  config.rafd_crop_size, config.image_size, config.batch_size,
                                  'RaFD', config.mode, config.num_workers)
 
-    id_train_dir, triplet_loader = get_triplet_loader(config, config.rafd_image_dir, None, None,
-                                 config.rafd_crop_size, config.image_size, config.batch_size,
-                                 'RaFD', config.mode, config.num_workers)
-    
+    # if config.mode == 'test':
+    #     rafd_loader = data_loader.get_loader(config.rafd_image_dir, None, None,
+    #                          config.rafd_crop_size, config.image_size, config.batch_size,
+    #                          'RaFD', config.mode, config.num_workers)
 
     # Solver for training and testing StarGAN.
-    solver = Solver(celeba_loader, rafd_loader, triplet_loader, id_train_dir, config)
+    solver = Solver(celeba_loader, rafd_loader, config)
 
     if config.mode == 'train':
         if config.dataset in ['CelebA', 'RaFD']:
@@ -54,7 +55,8 @@ def main(config):
             solver.train_multi()
     elif config.mode == 'test':
         if config.dataset in ['CelebA', 'RaFD']:
-            solver.test()
+            #solver.test()
+            solver.translate_one_by_one()
         elif config.dataset in ['Both']:
             solver.test_multi()
     elif config.mode == 'test_gif':
@@ -80,6 +82,9 @@ if __name__ == '__main__':
     
     # Training configuration.
     parser.add_argument('--dataset', type=str, default='CelebA', choices=['CelebA', 'RaFD', 'Both'])
+    parser.add_argument('--use_id', type=int, default=1, help='use id loss or not')
+    parser.add_argument('--facenet_path', type=str, default="../facenet_pytorch/model/facenet_generated_256_2.ckpt")
+    parser.add_argument('--use_L1', type=int, default=1, help='use id loss or not')
     parser.add_argument('--batch_size', type=int, default=16, help='mini-batch size')
     parser.add_argument('--num_iters', type=int, default=500000, help='number of total iterations for training D')
     parser.add_argument('--num_iters_decay', type=int, default=100000, help='number of iterations for decaying lr')
@@ -101,12 +106,14 @@ if __name__ == '__main__':
                         help='how many triplets will generate from the dataset')
     parser.add_argument('--margin', type=float, default=0.5, metavar='MARGIN',
                         help='the margin value for the triplet loss function (default: 1.0')
+    parser.add_argument('--log_image_quality', type=int, default=1, help='log_image_quality or not')
 
     # Test configuration.
     parser.add_argument('--test_iters', type=int, default=200000, help='test model from this step')
     parser.add_argument('--n_interpolations', type=int, default=10, help='Number of interpolations per image')
     parser.add_argument('--test_dims', type=int, nargs='+',
                         default=[10, 9, 5, 1, 2])
+
 
     # Miscellaneous.
     parser.add_argument('--num_workers', type=int, default=1)
