@@ -1,0 +1,20 @@
+myPCA                         PCA降维
+
+TrainSubspace                 训练商图像空间
+
+TrainSubspaceUseDiffDabaB     用跨库进行商图像空间训练
+
+QuotientImage                 计算单张图像的商图像
+
+CalculateQuotientImAsABath    批量计算商图像
+
+TrainStandardcoordinate       训练标准光照在子空间的投影系数
+
+TrainStandardcoordinateUsingDiffDataB  训练标准光照在子空间的投影系数(用多个库）
+
+IlluNormalizedByQuotientImage 单张图像光照矫正
+
+IlluNormalizeAsABath          批量进行光照矫正
+
+DoubleToJPG                   批量将数据转为JPG图像存储
+MainProject                   将QI实验各种函数整合，一次完成整个实验
