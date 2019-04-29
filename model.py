@@ -97,7 +97,7 @@ class FaceModel(nn.Module):
 
         self.embedding_size = embedding_size
 
-        self.model.fc = nn.Linear(512*4*4, self.embedding_size)
+        self.model.fc = nn.Linear(2048*4*4, self.embedding_size)
 
         self.model.classifier = nn.Linear(self.embedding_size, num_classes)
 

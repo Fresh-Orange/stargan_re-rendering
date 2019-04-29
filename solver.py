@@ -20,7 +20,7 @@ from PIL import Image
 class Solver(object):
     """Solver for training and testing StarGAN."""
 
-    def __init__(self, celeba_loader, rafd_loader, triplet_loader, id_train_dir, config):
+    def __init__(self, celeba_loader, rafd_loader, config):
         """Initialize configurations."""
 
         # Data loader.
@@ -51,12 +51,13 @@ class Solver(object):
         self.beta2 = config.beta2
         self.resume_iters = config.resume_iters
         self.selected_attrs = config.selected_attrs
+        self.use_id = config.use_id
+        self.use_L1 = config.use_L1
 
         # facenet configurations
-        self.triplet_loader = triplet_loader
-        self.id_train_dir = id_train_dir
         self.facenet_embedding_size = config.embedding_size
         self.margin = config.margin
+        self.facenet_path = config.facenet_path
 
         # Test configurations.
         self.test_iters = config.test_iters
@@ -72,6 +73,7 @@ class Solver(object):
         self.sample_dir = config.sample_dir
         self.model_save_dir = config.model_save_dir
         self.result_dir = config.result_dir
+        self.log_image_quality = config.log_image_quality
 
         # Step size.
         self.log_step = config.log_step
@@ -89,7 +91,7 @@ class Solver(object):
         if self.dataset in ['CelebA', 'RaFD']:
             self.G = Generator(self.g_conv_dim, self.c_dim, self.g_repeat_num)
             self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num)
-            self.D_id = torch.load("../facenet_pytorch/model/facenet_margin10.ckpt") # FaceModel(embedding_size=self.facenet_embedding_size,num_classes=len(self.id_train_dir.classes),pretrained=False)
+            self.D_id = torch.load(self.facenet_path)
         elif self.dataset in ['Both']:
             self.G = Generator(self.g_conv_dim, self.c_dim+self.c2_dim+2, self.g_repeat_num)   # 2 for mask vector.
             self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim+self.c2_dim, self.d_repeat_num)
@@ -209,6 +211,14 @@ class Solver(object):
             c_trg_list.append(c_trg.to(self.device))
         return c_trg_list
 
+    def create_one_labels(self, c_org, c_dim, class_index, dataset='CelebA', selected_attrs=None):
+        """Generate target domain labels for debugging and testing."""
+        c_trg_list = []
+        if dataset == 'RaFD':
+            c_trg = self.label2onehot(torch.ones(c_org.size(0))*class_index, c_dim)
+        c_trg_list.append(c_trg.to(self.device))
+        return c_trg_list
+
     def interpolate_labels(self, c_org, c_dim, dims, dataset='CelebA', selected_attrs=None):
         """Generate target domain labels for debugging and testing."""
         alphas = np.linspace(0, 1, self.n_interpolations)
@@ -259,7 +269,6 @@ class Solver(object):
         # Start training.
         print('Start training...')
         start_time = time.time()
-        triplet_data_iter = iter(self.triplet_loader)
         for i in range(start_iters, self.num_iters):
 
             #print("step {}", i)
@@ -277,16 +286,9 @@ class Solver(object):
 
             x_real_trg = data_loader.get_by_idx(label_trg, file_idx_org)
 
-            #print("triplet_data_iter begin")
-            #(data_a, data_p, data_n, label_p, label_n) = next(triplet_data_iter)
-            #print("triplet_data_iter end")
-            #data_a, data_p, data_n = Variable(data_a), Variable(data_p), Variable(data_n)
 
 
-            if self.dataset == 'CelebA':
-                c_org = label_org.clone()
-                c_trg = label_trg.clone()
-            elif self.dataset == 'RaFD':
+            if self.dataset == 'RaFD':
                 c_org = self.label2onehot(label_org, self.c_dim)
                 c_trg = self.label2onehot(label_trg, self.c_dim)
 
@@ -296,11 +298,7 @@ class Solver(object):
             c_trg = c_trg.to(self.device)             # Target domain labels.
             label_org = label_org.to(self.device)     # Labels for computing classification loss.
             label_trg = label_trg.to(self.device)     # Labels for computing classification loss.
-            # data_a = data_a.to(self.device)
-            # data_p = data_p.to(self.device)
-            # data_n = data_n.to(self.device)
-            #label_p = label_p.to(self.device)
-            #label_n = label_n.to(self.device)
+
 
             # =================================================================================== #
             #                             2. Train the discriminator                              #
@@ -341,40 +339,6 @@ class Solver(object):
             loss['D/loss_gp'] = d_loss_gp.item()
             # loss['D/loss_fake_cls'] = d_loss_fake_cls.item()
 
-            #print("0", loss)
-
-            # =================================================================================== #
-            #                             2. Train the facenet                                    #
-            # =================================================================================== #
-
-            # # compute output
-            # out_a, out_p, out_n = self.D_id(data_a), self.D_id(data_p), self.D_id(data_n)
-            #
-            # # Choose the hard negatives
-            # d_p = l2_dist.forward(out_a, out_p)
-            # d_n = l2_dist.forward(out_a, out_n)
-            # all = (d_n - d_p < self.margin).cpu().data.numpy().flatten()
-            # hard_triplets = np.where(all == 1)
-            # if len(hard_triplets[0]) == 0:
-            #     continue
-            # out_selected_a = out_a.cpu()[hard_triplets].cuda()
-            # out_selected_p = out_p.cpu()[hard_triplets].cuda()
-            # out_selected_n = out_n.cpu()[hard_triplets].cuda()
-            #
-            # triplet_loss = TripletMarginLoss(self.margin).forward(out_selected_a, out_selected_p, out_selected_n)
-            #
-            # # compute gradient and update weights
-            # self.reset_grad()
-            # triplet_loss.backward()
-            # #id_dis_loss.backward()
-            # self.d_id_optimizer.step()
-            #
-            # # log loss value
-            # loss['D_id/loss_triplet'] = triplet_loss.item()
-            # #loss['D_id/loss_cross_entropy'] = cross_entropy_loss.item()
-            # #loss['D_id/loss_total'] = id_dis_loss.item()
-            #
-            # #print("1", loss)
 
             # =================================================================================== #
             #                               3. Train the generator                                #
@@ -383,18 +347,24 @@ class Solver(object):
             if (i+1) % self.n_critic == 0:
                 # Original-to-target domain.
                 x_fake = self.G(x_real, c_trg)
-                x_real_id_feature = self.D_id.forward(x_real)
-                x_fake_id_feature = self.D_id.forward(x_fake)
-                g_loss_id = 0.0005*torch.sum((x_real_id_feature - x_fake_id_feature).pow(2))
+
                 out_src, out_cls = self.D(x_fake)
                 g_loss_fake = - torch.mean(out_src)
                 g_loss_cls = self.classification_loss(out_cls, label_trg, self.dataset)
 
-                L1_loss = torch.mean(torch.abs(x_fake - x_real_trg))
+                L1_loss = 0
+                if self.use_L1==1:
+                    L1_loss = torch.mean(torch.abs(x_fake - x_real_trg))
 
                 # Target-to-original domain.
                 x_reconst = self.G(x_fake, c_org)
                 g_loss_rec = torch.mean(torch.abs(x_real - x_reconst))
+
+                g_loss_id = 0
+                if self.use_id==1:
+                    x_real_id_feature = self.D_id.forward(x_real)
+                    x_fake_id_feature = self.D_id.forward(x_fake)
+                    g_loss_id = 0.0005 * torch.sum((x_real_id_feature - x_fake_id_feature).pow(2))
 
                 # Backward and optimize.
                 g_loss = g_loss_fake + self.lambda_rec * g_loss_rec + \
@@ -408,20 +378,11 @@ class Solver(object):
                 loss['G/loss_fake'] = g_loss_fake.item()
                 loss['G/loss_rec'] = g_loss_rec.item()
                 loss['G/loss_cls'] = g_loss_cls.item()
-                loss['G/loss_L1'] = L1_loss.item()
-                loss['G/loss_id'] = g_loss_id.item()
+                if self.use_L1==1:
+                    loss['G/loss_L1'] = L1_loss.item()
+                if self.use_id==1:
+                    loss['G/loss_id'] = g_loss_id.item()
 
-                ############  image quality  ###############
-
-                # denorm_x_fake = self.to_image(x_fake[0])
-                # denorm_x_real_trg = self.to_image(x_real_trg[0])
-                # metric_ssim, _ = ssim(denorm_x_real_trg, denorm_x_fake)
-                # metric_psnr = psnr(denorm_x_real_trg, denorm_x_fake)
-                # metric_vifp = vifp(denorm_x_real_trg, denorm_x_fake)
-                #
-                # loss['Metric/ssim'] = metric_ssim
-                # loss['Metric/psnr'] = metric_psnr
-                # loss['Metric/vifp'] = metric_vifp
 
             # =================================================================================== #
             #                                 4. Miscellaneous                                    #
@@ -448,32 +409,36 @@ class Solver(object):
 
                 ############  image quality  ###############
 
-                # generated_list = []
-                # with torch.no_grad():
-                #     x_fake_list = [x_fixed]
-                #     for c_fixed in c_fixed_list:
-                #         # print("x_fixed, c_fixed", len(x_fixed), len(c_fixed))
-                #         generated = self.G(x_fixed, c_fixed)
-                #         generated_list.append(generated)
-                #         x_fake_list.append(generated)
-                #
-                # generated_list = torch.cat(tuple(generated_list), 0)
-                # denorm_x_fakes = [self.to_image(x) for x in generated_list]
-                # x_fixed_long = torch.cat((x_fixed, x_fixed, x_fixed, x_fixed, x_fixed, x_fixed), 0)
-                # denorm_x_real_trgs = [self.to_image(x) for x in x_fixed_long]
-                # print(type(denorm_x_real_trgs))
-                # print(type(denorm_x_fakes))
-                # print(len(generated_list))
-                # metric_ssim = np.mean(
-                #     np.array([ssim(denorm_x_real_trgs[ix], denorm_x_fakes[ix])[0] for ix in range(len(generated_list))]))
-                # metric_psnr = np.mean(
-                #     np.array([psnr(denorm_x_real_trgs[ix], denorm_x_fakes[ix]) for ix in range(len(generated_list))]))
-                # metric_vifp = np.mean(
-                #     np.array([vifp(denorm_x_real_trgs[ix], denorm_x_fakes[ix]) for ix in range(len(generated_list))]))
-                #
-                # loss['Metric/ssim'] = metric_ssim
-                # loss['Metric/psnr'] = metric_psnr
-                # loss['Metric/vifp'] = metric_vifp
+                if self.log_image_quality==1:
+                    generated_list = []
+                    with torch.no_grad():
+                        x_fake_list = [x_fixed]
+                        for c_fixed in c_fixed_list:
+                            # print("x_fixed, c_fixed", len(x_fixed), len(c_fixed))
+                            generated = self.G(x_fixed, c_fixed)
+                            generated_list.append(generated)
+                            x_fake_list.append(generated)
+
+                    generated_list = torch.cat(tuple(generated_list), 0)
+                    denorm_x_fakes = [self.to_image(x) for x in generated_list]
+                    x_fixed_long = torch.cat((x_fixed,) * self.c_dim, 0)
+                    denorm_x_real_trgs = [self.to_image(x) for x in x_fixed_long]
+                    print(type(denorm_x_real_trgs))
+                    print(type(denorm_x_fakes))
+                    print(len(generated_list))
+                    metric_ssim = np.mean(
+                        np.array(
+                            [ssim(denorm_x_real_trgs[ix], denorm_x_fakes[ix])[0] for ix in range(len(generated_list))]))
+                    metric_psnr = np.mean(
+                        np.array(
+                            [psnr(denorm_x_real_trgs[ix], denorm_x_fakes[ix]) for ix in range(len(generated_list))]))
+                    metric_vifp = np.mean(
+                        np.array(
+                            [vifp(denorm_x_real_trgs[ix], denorm_x_fakes[ix]) for ix in range(len(generated_list))]))
+
+                    loss['Metric/ssim'] = metric_ssim
+                    loss['Metric/psnr'] = metric_psnr
+                    loss['Metric/vifp'] = metric_vifp
 
 
                 et = time.time() - start_time
@@ -693,10 +658,13 @@ class Solver(object):
         self.restore_model(self.test_iters)
         
         # Set data loader.
-        if self.dataset == 'CelebA':
-            data_loader = self.celeba_loader
-        elif self.dataset == 'RaFD':
-            data_loader = self.rafd_loader
+        data_loader = self.rafd_loader
+
+        if not os.path.isdir("fake_images"):
+            os.makedirs("fake_images")
+        for i in range(6):
+            if not os.path.isdir("fake_images/{}".format(i)):
+                os.makedirs("fake_images/{}".format(i))
         
         with torch.no_grad():
             for i, (x_real, c_org) in enumerate(data_loader):
@@ -706,18 +674,47 @@ class Solver(object):
                 c_trg_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs)
 
                 # Translate images.
-                x_fake_list = [x_real]
                 for c_trg in c_trg_list:
-                    x_fake_list.append(self.G(x_real, c_trg))
+                    itemindex = np.where(c_trg == 1)[1][0]
+                    x_fake = self.G(x_real, c_trg)
+                    x_concat_norm = self.denorm(x_fake.data.cpu())
+                    result_path = os.path.join("fake_images/{}".format(itemindex), '{}-images.jpg'.format(i + 1))
+                    save_image(x_concat_norm, result_path, nrow=1, padding=0)
+                    print('Saved real and fake images into {}...'.format(result_path))
 
+    def translate_one_by_one(self):
+        """Translate images using StarGAN trained on a single dataset."""
+        # Load the trained generator.
+        self.restore_model(self.test_iters)
 
-                # Save the translated images.
-                x_concat = torch.cat(x_fake_list, dim=3)
-                x_concat_norm = self.denorm(x_concat.data.cpu())
+        # Set data loader.
+        data_loader = self.rafd_loader
+        dataset = data_loader.dataset
 
-                result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
-                save_image(x_concat_norm, result_path, nrow=1, padding=0)
-                print('Saved real and fake images into {}...'.format(result_path))
+        if not os.path.isdir("light_normalization_images"):
+            os.makedirs("light_normalization_images")
+        for i in dataset.classes:
+            if not os.path.isdir("light_normalization_images/{}".format(i)):
+                os.makedirs("light_normalization_images/{}".format(i))
+
+        with torch.no_grad():
+            for c_ix in range(6):
+                for i, (x_real, c_org) in enumerate(data_loader):
+
+                    # Prepare input images and target domain labels.
+                    x_real = x_real.to(self.device)
+                    # class_index = 2
+                    c_trg_list = self.create_one_labels(c_org, self.c_dim, c_ix, self.dataset, self.selected_attrs)
+
+                    # Translate images.
+                    for c_trg in c_trg_list:
+                        x_fake = self.G(x_real, c_trg)
+                        x_concat_norm = self.denorm(x_fake.data.cpu())
+                        result_path = os.path.join("light_normalization_images/{}".format(dataset.classes[c_org[0]]),
+                                                   '{}{}-images.jpg'.format(c_ix, i + 1))
+                        save_image(x_concat_norm, result_path, nrow=1, padding=0)
+                        print('Saved real and fake images into {}...'.format(result_path))
+
 
     def test_to_gif(self):
         """Translate images using StarGAN trained on a single dataset."""
